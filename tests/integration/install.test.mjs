@@ -5,15 +5,9 @@ import path from "node:path";
 
 import { execFileSync } from "node:child_process";
 
-import { tmpdir, writeTree, cleanupAll, runCli, runCliJson, exists, readIfExists, FRAMEWORK_ROOT } from "../helpers.mjs";
+import { tmpdir, writeTree, cleanupAll, runCli, runCliJson, sandbox, exists, readIfExists, FRAMEWORK_ROOT } from "../helpers.mjs";
 
 test.after(cleanupAll);
-
-function sandbox() {
-  const projectRoot = tmpdir("uaf-proj-");
-  const home = tmpdir("uaf-home-");
-  return { projectRoot, home, env: { HOME: home, PATH: process.env.PATH } };
-}
 
 const ALL = "claude,codex,opencode,omp";
 
@@ -217,17 +211,17 @@ test("install refuses to target the framework's own checkout unless --self is pa
   assert.deepEqual(allowed.agents, ["omp"]);
 });
 
-test("the POSIX wrapper accepts a target directory and does not install into its own checkout", () => {
-  const projectRoot = tmpdir("uaf-wrap-");
-  const home = tmpdir("uaf-wrap-home-");
-  execFileSync(path.join(FRAMEWORK_ROOT, "scripts", "install.sh"), ["--yes", "-C", projectRoot, "--agents", "omp"], {
+test("the POSIX wrapper accepts a target directory and does not install into its own checkout", { skip: process.platform === "win32" && "POSIX wrapper" }, () => {
+  const { projectRoot, home, env } = sandbox("uaf-wrap-");
+  execFileSync("sh", [path.join(FRAMEWORK_ROOT, "scripts", "install.sh"), "--yes", "-C", projectRoot, "--agents", "omp"], {
     cwd: FRAMEWORK_ROOT,
     encoding: "utf8",
-    env: { ...process.env, HOME: home },
+    env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   assert.ok(exists(path.join(projectRoot, ".uaf", "install.json")), "the wrapper must target --cwd");
   assert.equal(exists(path.join(FRAMEWORK_ROOT, ".uaf", "install.json")), false, "the checkout must stay clean");
+  assert.deepEqual(fs.readdirSync(home), [], "the sandbox home must remain untouched");
 });
 
 test("uninstall leaves no empty agent directories behind", () => {

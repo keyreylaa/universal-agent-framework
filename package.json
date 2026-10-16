@@ -20,8 +20,8 @@
     "templates"
   ],
   "scripts": {
-    "test": "node --test \"tests/unit/*.test.mjs\" \"tests/integration/*.test.mjs\" \"tests/security/*.test.mjs\"",
-    "test:e2e": "node --test \"tests/e2e/*.test.mjs\"",
+    "test": "node tests/run.mjs tests/unit tests/integration tests/security",
+    "test:e2e": "node tests/run.mjs tests/e2e",
     "test:all": "npm test && npm run test:e2e",
     "doctor": "node core/cli.mjs doctor",
     "compat": "node core/cli.mjs compat",

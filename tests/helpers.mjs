@@ -11,11 +11,52 @@ export const CLI = path.join(FRAMEWORK_ROOT, "core", "cli.mjs");
 
 const created = [];
 
-/** @returns {string} an empty temporary directory */
+/**
+ * @returns {string} an empty temporary directory, canonicalised
+ *
+ * Canonicalising matters because the CLI resolves every path against
+ * `process.cwd()`, which is the POSIX `getcwd()` value. On macOS `/var` is a
+ * symlink to `/private/var`, so the manifest stores `/private/var/...` while a
+ * bare `os.tmpdir()` based expectation says `/var/...`; install and uninstall
+ * would then appear to disagree about a path that is really the same one.
+ */
 export function tmpdir(prefix = "uaf-test-") {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
   created.push(dir);
   return dir;
+}
+
+/**
+ * Environment for a CLI subprocess that cannot see the developer's real
+ * configuration, on every platform. The overrides are pinned to the same
+ * locations the agent would use by default under `home`, so a sandbox is
+ * hermetic without moving where installs land.
+ *
+ * `HOME` alone is not enough. Node's `os.homedir()` reads `USERPROFILE` on
+ * Windows and `HOME` everywhere else, and the documented per-agent overrides
+ * bypass the home directory entirely, so detection would still find the
+ * developer's own config. `core/agents.mjs` consults `PI_CODING_AGENT_DIR`
+ * (Oh My Pi), `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `OPENCODE_CONFIG_DIR` and
+ * `XDG_CONFIG_HOME` (OpenCode) ahead of any home-derived root.
+ */
+export function sandboxEnv(home) {
+  return {
+    HOME: home,
+    USERPROFILE: home,
+    PI_CODING_AGENT_DIR: path.join(home, ".omp", "agent"),
+    CLAUDE_CONFIG_DIR: path.join(home, ".claude"),
+    CODEX_HOME: path.join(home, ".codex"),
+    OPENCODE_CONFIG_DIR: path.join(home, ".config", "opencode"),
+    XDG_CONFIG_HOME: path.join(home, ".config"),
+    PATH: process.env.PATH,
+  };
+}
+
+/** A disposable project + home pair whose CLI subprocesses see nothing else. */
+export function sandbox(prefix = "uaf") {
+  const projectRoot = tmpdir(`${prefix}-proj-`);
+  const home = tmpdir(`${prefix}-home-`);
+  return { projectRoot, home, env: sandboxEnv(home) };
 }
 
 export function cleanupAll() {

@@ -4,15 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-import { tmpdir, writeTree, cleanupAll, runCli, runCliJson, initRepo, FRAMEWORK_ROOT, exists, readIfExists } from "../helpers.mjs";
+import { tmpdir, writeTree, cleanupAll, runCli, runCliJson, sandbox as makeSandbox, initRepo, FRAMEWORK_ROOT, exists, readIfExists } from "../helpers.mjs";
 
 test.after(cleanupAll);
 
-function sandbox() {
-  const projectRoot = tmpdir("uaf-cli-");
-  const home = tmpdir("uaf-home-");
-  return { projectRoot, home, env: { HOME: home, PATH: process.env.PATH } };
-}
+const sandbox = () => makeSandbox("uaf-cli");
 
 test("doctor reports the environment without side effects", () => {
   const { projectRoot, env } = sandbox();
@@ -262,11 +258,19 @@ test("the vendored runtime is independent of the framework checkout", () => {
 });
 
 test("a configured agent list is used when --agents is absent and nothing is detected", () => {
-  const { projectRoot, home, env } = sandbox();
+  const { projectRoot, env } = sandbox();
   writeTree(projectRoot, { ".uaf/config.json": JSON.stringify({ agents: ["claude"], mode: "lite" }) });
-  // A sandbox PATH with no agent binaries means detection finds nothing, so the
-  // configured list is the only remaining default.
-  const plan = runCliJson(["install", "--dry-run"], { cwd: projectRoot, env: { ...env, PATH: "/nonexistent" } });
+  // Detection must genuinely find nothing before the configured list can become the
+  // default: an empty PATH (no agent binary to discover) and a home with no user
+  // config directory. `sandbox()` is what makes the second half true on Windows —
+  // overriding HOME alone does not isolate the child, because Node's os.homedir()
+  // reads USERPROFILE there, and core/agents.mjs resolves the user roots through
+  // PI_CODING_AGENT_DIR, CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_CONFIG_DIR and
+  // XDG_CONFIG_HOME before it ever looks at the home directory.
+  const isolated = { ...env, PATH: tmpdir("uaf-empty-path-") };
+  const detected = runCliJson(["doctor"], { cwd: projectRoot, env: isolated }).detected;
+  assert.deepEqual(detected, [], "precondition: no agent may be detected");
+  const plan = runCliJson(["install", "--dry-run"], { cwd: projectRoot, env: isolated });
   assert.deepEqual(plan.agents, ["claude"]);
 });
 

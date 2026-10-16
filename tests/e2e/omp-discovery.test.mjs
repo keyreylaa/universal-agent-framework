@@ -9,7 +9,7 @@ import test from "node:test";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
-import { tmpdir, runCli, cleanupAll } from "../helpers.mjs";
+import { tmpdir, runCli, cleanupAll, sandboxEnv } from "../helpers.mjs";
 
 test.after(cleanupAll);
 
@@ -28,7 +28,8 @@ function ompRead(target, { cwd, home }) {
   const stdout = execFileSync("omp", ["read", target], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, HOME: home, PI_NO_TITLE: "1" },
+    // The sandbox env keeps the agent from reading the developer's own config.
+    env: { ...sandboxEnv(home), PI_NO_TITLE: "1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   return stdout;
@@ -37,7 +38,7 @@ function ompRead(target, { cwd, home }) {
 test("oh-my-pi discovers every installed skill through its own skill:// resolver", { skip: !OMP_AVAILABLE && "omp is not installed" }, () => {
   const projectRoot = tmpdir("uaf-e2e-");
   const home = tmpdir("uaf-e2e-home-");
-  runCli(["install", "--agents", "claude,codex,opencode,omp", "--yes"], { cwd: projectRoot, env: { HOME: home, PATH: process.env.PATH } });
+  runCli(["install", "--agents", "claude,codex,opencode,omp", "--yes"], { cwd: projectRoot, env: sandboxEnv(home) });
 
   const body = ompRead("skill://code-quality", { cwd: projectRoot, home });
   assert.match(body, /^\[Skill file: .*SKILL\.md\]/m);
@@ -48,7 +49,7 @@ test("oh-my-pi discovers every installed skill through its own skill:// resolver
 test("duplicate copies in two shared skill roots collapse instead of being namespaced", { skip: !OMP_AVAILABLE && "omp is not installed" }, () => {
   const projectRoot = tmpdir("uaf-e2e-");
   const home = tmpdir("uaf-e2e-home-");
-  runCli(["install", "--agents", "claude,codex,opencode,omp", "--yes"], { cwd: projectRoot, env: { HOME: home, PATH: process.env.PATH } });
+  runCli(["install", "--agents", "claude,codex,opencode,omp", "--yes"], { cwd: projectRoot, env: sandboxEnv(home) });
 
   // `.claude/skills` and `.agents/skills` hold byte-identical copies. If they did
   // not collapse, the second copy would be reachable as `claude/<name>` or

@@ -48,7 +48,10 @@ What it does, in order:
    `git clone --depth 1 --branch "$UAF_REF"` for a repository URL, an incremental
    `fetch` + `checkout --detach FETCH_HEAD` when the cache already exists, `curl | tar` for an
    archive URL, a recursive copy for a local directory, and a `codeload` tarball when `git` is
-   absent but the source is a GitHub URL.
+   absent but the source is a GitHub URL. The archive path needs `curl`, `tar`, and `gzip`, and
+   says which one is missing instead of letting `tar` fail with a truncated pipe. Both fetch
+   paths were exercised against the live repository: with `git` on `PATH`, and with a minimal
+   `PATH` that had no `git` (the `codeload` branch), which fetched and installed successfully.
 3. Verifies the fetched tree actually contains `core/cli.mjs` and that Node >= 20 is present.
 4. Resolves the target: an explicit `-C`/`--cwd` in the arguments wins, then `UAF_TARGET`, then the
    current directory. The cache directory is refused as a target.

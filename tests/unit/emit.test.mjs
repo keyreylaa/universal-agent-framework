@@ -12,16 +12,22 @@ import { tmpdir, writeTree, cleanupAll, FRAMEWORK_ROOT } from "../helpers.mjs";
 
 test.after(cleanupAll);
 
+// Path fixtures for resolvePaths are built with path.resolve/path.join rather than
+// hard-coded POSIX strings, so the expectations carry the same separators (and, for
+// the project root, the same drive letter) that core/agents.mjs produces on Windows.
+const PROJECT_ROOT = path.resolve("/repo");
+const HOME_ROOT = "/home/u";
+
 test("every agent resolves a coherent path set", () => {
   for (const id of AGENT_IDS) {
     // `env: {}` keeps the assertion independent of the runner: XDG_CONFIG_HOME,
     // CLAUDE_CONFIG_DIR, CODEX_HOME, and OPENCODE_CONFIG_DIR legitimately relocate
     // these roots, and GitHub runners set XDG_CONFIG_HOME.
-    const paths = resolvePaths(id, { projectRoot: "/repo", home: "/home/u", env: {} });
+    const paths = resolvePaths(id, { projectRoot: PROJECT_ROOT, home: HOME_ROOT, env: {} });
     assert.equal(paths.id, id);
-    assert.ok(paths.skillsUser.startsWith("/home/u"), `${id} user skills root`);
-    assert.ok(paths.skillsProject.startsWith("/repo"), `${id} project skills root`);
-    assert.ok(paths.contextUser === null || paths.contextUser.startsWith("/home/u"), `${id} user context`);
+    assert.ok(paths.skillsUser.startsWith(path.join(HOME_ROOT)), `${id} user skills root`);
+    assert.ok(paths.skillsProject.startsWith(PROJECT_ROOT), `${id} project skills root`);
+    assert.ok(paths.contextUser === null || paths.contextUser.startsWith(path.join(HOME_ROOT)), `${id} user context`);
     assert.ok(Array.isArray(paths.notes));
   }
 });
@@ -42,32 +48,36 @@ test("agent detection reports absence without throwing", () => {
 test("set cover picks two shared skill roots for all four agents", () => {
   const cands = skillCandidates({
     scope: "project",
-    projectRoot: "/repo",
-    home: "/home/u",
-    pathsById: Object.fromEntries(AGENT_IDS.map((id) => [id, resolvePaths(id, { projectRoot: "/repo", home: "/home/u" })])),
+    projectRoot: PROJECT_ROOT,
+    home: HOME_ROOT,
+    pathsById: Object.fromEntries(AGENT_IDS.map((id) => [id, resolvePaths(id, { projectRoot: PROJECT_ROOT, home: HOME_ROOT })])),
   });
   const targets = planSkillTargets({ selectedAgents: ["claude", "codex", "opencode", "omp"], candidates: cands });
-  const dirs = targets.map((t) => t.dir.replace("/repo/", ""));
-  assert.deepEqual(dirs.sort(), [".agents/skills", ".claude/skills"]);
+  const dirs = targets.map((t) => path.relative(PROJECT_ROOT, t.dir));
+  assert.deepEqual(dirs.sort(), [path.join(".agents", "skills"), path.join(".claude", "skills")].sort());
   const covered = new Set(targets.flatMap((t) => t.covers));
   assert.equal(covered.size, 4);
 });
 
 test("set cover never proposes a location that serves no selected agent", () => {
-  const pathsById = Object.fromEntries(AGENT_IDS.map((id) => [id, resolvePaths(id, { projectRoot: "/repo", home: "/home/u" })]));
-  const cands = skillCandidates({ scope: "project", projectRoot: "/repo", home: "/home/u", pathsById });
+  const pathsById = Object.fromEntries(AGENT_IDS.map((id) => [id, resolvePaths(id, { projectRoot: PROJECT_ROOT, home: HOME_ROOT })]));
+  const cands = skillCandidates({ scope: "project", projectRoot: PROJECT_ROOT, home: HOME_ROOT, pathsById });
   const targets = planSkillTargets({ selectedAgents: ["omp"], candidates: cands });
   assert.equal(targets.length, 1);
-  assert.equal(targets[0].dir.replace("/repo/", ""), ".claude/skills");
+  assert.equal(path.relative(PROJECT_ROOT, targets[0].dir), path.join(".claude", "skills"));
   assert.ok(targets[0].covers.includes("omp"));
 });
 
 test("user-scope set cover uses the shared home roots", () => {
-  const pathsById = Object.fromEntries(AGENT_IDS.map((id) => [id, resolvePaths(id, { projectRoot: "/repo", home: "/home/u" })]));
-  const cands = skillCandidates({ scope: "user", projectRoot: "/repo", home: "/home/u", pathsById });
+  const pathsById = Object.fromEntries(AGENT_IDS.map((id) => [id, resolvePaths(id, { projectRoot: PROJECT_ROOT, home: HOME_ROOT })]));
+  const cands = skillCandidates({ scope: "user", projectRoot: PROJECT_ROOT, home: HOME_ROOT, pathsById });
   const targets = planSkillTargets({ selectedAgents: ["claude", "codex", "opencode", "omp"], candidates: cands });
   const dirs = targets.map((t) => t.dir).sort();
-  assert.deepEqual(dirs, ["/home/u/.agents/skills", "/home/u/.claude/skills"]);
+  // The two shared roots are exactly the Codex and Claude user skill directories.
+  assert.deepEqual(
+    dirs,
+    [pathsById.codex.skillsUser, pathsById.claude.skillsUser].sort(),
+  );
 });
 
 test("the framework's own skills and commands all validate", () => {
@@ -251,31 +261,35 @@ test("installing into a sandbox home never writes outside the sandbox", async ()
 });
 
 test("documented environment overrides relocate the user roots", () => {
+  // An override is returned as given (it is an absolute path, so nothing is joined
+  // onto the home directory) except XDG_CONFIG_HOME, which is a base directory that
+  // OpenCode's own subdirectory is joined onto.
   const cases = [
-    { id: "claude", env: { CLAUDE_CONFIG_DIR: "/cl" }, root: "/cl", skills: "/cl/skills" },
-    { id: "opencode", env: { XDG_CONFIG_HOME: "/xdg" }, root: "/xdg/opencode", skills: "/xdg/opencode/skills" },
-    { id: "opencode", env: { OPENCODE_CONFIG_DIR: "/oc" }, root: "/oc", skills: "/oc/skills" },
-    { id: "omp", env: { PI_CODING_AGENT_DIR: "/omp" }, root: "/omp", skills: "/omp/skills" },
+    { id: "claude", env: { CLAUDE_CONFIG_DIR: "/cl" }, root: "/cl" },
+    { id: "opencode", env: { XDG_CONFIG_HOME: "/xdg" }, root: path.join("/xdg", "opencode") },
+    { id: "opencode", env: { OPENCODE_CONFIG_DIR: "/oc" }, root: "/oc" },
+    { id: "omp", env: { PI_CODING_AGENT_DIR: "/omp" }, root: "/omp" },
     // Codex is the exception on purpose: CODEX_HOME holds config, auth, and prompts,
     // while its documented user skill location is $HOME/.agents/skills.
-    { id: "codex", env: { CODEX_HOME: "/cx" }, root: "/cx", skills: "/home/u/.agents/skills", commands: "/cx/prompts" },
+    { id: "codex", env: { CODEX_HOME: "/cx" }, root: "/cx", skills: path.join(HOME_ROOT, ".agents", "skills") },
   ];
-  for (const { id, env, root, skills, commands } of cases) {
-    const paths = resolvePaths(id, { projectRoot: "/repo", home: "/home/u", env });
+  for (const { id, env, root, skills = path.join(root, "skills") } of cases) {
+    const paths = resolvePaths(id, { projectRoot: PROJECT_ROOT, home: HOME_ROOT, env });
     assert.equal(paths.userRoot, root, `${id} userRoot`);
     assert.equal(paths.skillsUser, skills, `${id} skillsUser`);
-    if (commands) assert.equal(paths.commandsUser, commands, `${id} commandsUser`);
+    if (id === "codex") assert.equal(paths.commandsUser, path.join(root, "prompts"), "codex commandsUser");
   }
 });
 
 test("a named profile selects its own agent directory and env wins over home", () => {
-  const profiled = resolvePaths("omp", { projectRoot: "/repo", home: "/home/u", env: { OMP_PROFILE: "work" } });
-  assert.equal(profiled.userRoot, "/home/u/.omp/profiles/work/agent");
+  const profiled = resolvePaths("omp", { projectRoot: PROJECT_ROOT, home: HOME_ROOT, env: { OMP_PROFILE: "work" } });
+  assert.equal(profiled.userRoot, path.join(HOME_ROOT, ".omp", "profiles", "work", "agent"));
 
   // An explicit agent dir is stronger than a profile, matching the documented order.
+  // The override is used verbatim, so the expectation is the literal, not a join.
   const explicit = resolvePaths("omp", {
-    projectRoot: "/repo",
-    home: "/home/u",
+    projectRoot: PROJECT_ROOT,
+    home: HOME_ROOT,
     env: { OMP_PROFILE: "work", PI_CODING_AGENT_DIR: "/custom" },
   });
   assert.equal(explicit.userRoot, "/custom");

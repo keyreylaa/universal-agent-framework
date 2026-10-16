@@ -23,33 +23,49 @@ npm run test:all  # npm test, then npm run test:e2e
 `npm test` runs:
 
 ```sh
-node --test "tests/unit/*.test.mjs" "tests/integration/*.test.mjs" "tests/security/*.test.mjs"
+node tests/run.mjs tests/unit tests/integration tests/security
 ```
 
-`npm run test:e2e` runs `node --test "tests/e2e/*.test.mjs"`.
+`npm run test:e2e` runs `node tests/run.mjs tests/e2e`.
+
+Both go through `tests/run.mjs`, a dependency-free launcher. Node 20 cannot expand globs for
+`node --test` (glob support arrived in Node 21), so a quoted pattern like `"tests/unit/*.test.mjs"`
+became one literal path that the runner could not find — a run that reported zero tests instead of
+failing. The launcher expands each named suite directory itself, sorts the `*.test.mjs` files, and
+spawns `node --test` with explicit paths. A suite directory that does not exist, or that holds no
+test files, is a hard error with a non-zero exit rather than a silent pass.
 
 ## Test helper contract
 
 `tests/helpers.mjs` is the shared contract. Every test builds its own tree and no test touches the
 developer's real configuration directories.
 
-- `tmpdir(prefix)` — creates a fresh temporary directory (`os.tmpdir()` + `mkdtempSync`) and records
-  it for cleanup. Tests that need an isolated home create a second one.
+- `tmpdir(prefix)` — creates a fresh temporary directory and returns its **canonical** path
+  (`realpathSync`, not the path `mkdtempSync` returned). macOS's `/var` is a symlink to
+  `/private/var`, and `process.cwd()` inside a child reports the canonical form, so an
+  un-canonicalised expectation made a correct install look wrong.
+- `sandboxEnv(home)` — the environment for every CLI subprocess in a sandbox. It sets `HOME` **and**
+  `USERPROFILE` (Node reads the latter on Windows), plus the per-agent overrides that
+  `core/agents.mjs` consults ahead of any home-derived root: `PI_CODING_AGENT_DIR`,
+  `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `OPENCODE_CONFIG_DIR`, and `XDG_CONFIG_HOME`. Without all of
+  them a sandbox is not hermetic, and detection finds the developer's real configuration.
+- `sandbox(prefix)` — the pair most tests want: a disposable project directory plus a disposable
+  home, with `env` already built. Project-scope installs are asserted to leave that home empty.
 - `cleanupAll()` — registered with `test.after(cleanupAll)` in every file that creates temporary
   directories, removing each recorded directory.
 - `writeTree(root, { "rel/path": "content" })` — materializes a fixture tree.
 - `runCli(args, { cwd, env, expectFailure })` — spawns `core/cli.mjs` as a real subprocess so exit
-  codes are exercised. Unless `expectFailure` is set, a non-zero exit throws with the captured
-  stderr. Sandboxed runs pass `env: { HOME: home, PATH: process.env.PATH }`.
+  codes are exercised. Unless `expectFailure` is set, a non-zero exit throws with the captured stderr.
 - `runCliJson(args, options)` — runs `runCli` with `--json` appended and parses stdout.
 - `git(cwd, args)` — runs git in a fixture directory.
 - `initRepo(dir, { withCommit })` — a minimal repository with a deterministic identity
   (`Test Fixture <fixture@example.invalid>`), branch `main`, and, by default, one commit.
 - `exists(p)`, `readIfExists(p)` — existence and read-or-null helpers.
 
-The sandbox HOME is the mechanism: integration and security tests construct `HOME` from `tmpdir()`,
-so an install targets the temporary home rather than `~/.claude`, `~/.agents`, and so on. The
-install integration suite asserts that a project-scope install leaves the sandbox home empty.
+Expectations are built with `path.resolve`/`path.join` from the same inputs the code receives, never
+from hard-coded POSIX strings: `resolvePaths` correctly uses the platform `path` module, so a
+Windows assertion written against `/repo/.claude/skills` fails for a reason that has nothing to do
+with the behaviour under test.
 
 ## What the tests deliberately do not do
 
@@ -65,17 +81,18 @@ install integration suite asserts that a project-scope install leaves the sandbo
 ## Running one suite
 
 ```sh
-node --test "tests/unit/*.test.mjs"
-node --test "tests/integration/*.test.mjs"
-node --test "tests/security/*.test.mjs"
-node --test "tests/e2e/*.test.mjs"
+node tests/run.mjs tests/unit
+node tests/run.mjs tests/integration
+node tests/run.mjs tests/security
+node tests/run.mjs tests/e2e
 
-# or a single file
+# any combination, or a single file directly
+node tests/run.mjs tests/unit tests/security
 node --test tests/unit/secrets.test.mjs
 ```
 
-The patterns are quoted so the shell does not expand them first: `node --test` resolves the glob
-itself, which is also how the `npm test` script invokes it.
+Suite directories are named relative to the repository root; the launcher resolves them to explicit
+absolute paths before spawning `node --test`.
 
 ## End-to-end skip semantics
 
@@ -88,20 +105,24 @@ exits successfully with either "skipped" or "passed" — it never reports a fals
 
 ## Observed result
 
-Executed on this Linux/arm64 machine, Node from the workspace, with no agent installed:
+Executed on this Linux/arm64 machine (Node 24.22.0) with Oh My Pi installed:
 
 ```sh
-node --test "tests/unit/*.test.mjs" "tests/integration/*.test.mjs" "tests/security/*.test.mjs"
+npm test
 ```
 
-reported `tests 151`, `pass 151`, `fail 0`, `skipped 0` in about 65 seconds, and
+reported `tests 151`, `pass 151`, `fail 0`, `skipped 0` in about 83 seconds, and
 
 ```sh
 npm run test:e2e
 ```
 
-reported `tests 2`, `pass 2` in about 20 seconds on a machine with Oh My Pi installed. These are
-single runs on one machine; they are not statements about other platforms.
+reported `tests 2`, `pass 2`, `fail 0`, `skipped 0` in about 23 seconds — Oh My Pi is installed
+here, so the two e2e tests ran rather than skipping. The launcher itself was checked directly:
+`node tests/run.mjs tests/unit` reported `tests 92`, `pass 92`, `fail 0` and exited `0`, while
+`node tests/run.mjs tests/does-not-exist` printed `tests/run.mjs: suite directory not found:
+tests/does-not-exist` and exited `2`. These are single runs on one machine; they are not statements
+about other platforms.
 
 ## Cross-platform reality
 

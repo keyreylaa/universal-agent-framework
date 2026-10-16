@@ -58,9 +58,11 @@ fetch_from_directory() {
 
 fetch_from_archive() {
   archive_url=$1
-  if ! command -v curl >/dev/null 2>&1; then
-    die "curl is required to fetch an archive but was not found on PATH"
-  fi
+  # Check both tools up front: without this, tar reports a confusing
+  # "gzip: Cannot exec: No such file or directory" and a truncated pipe.
+  command -v curl >/dev/null 2>&1 || die "curl is required to fetch an archive but was not found on PATH"
+  command -v tar >/dev/null 2>&1 || die "tar is required to unpack the framework archive but was not found on PATH"
+  command -v gzip >/dev/null 2>&1 || die "gzip is required to unpack the .tar.gz archive but was not found on PATH; install it, or install git and re-run so the repository can be cloned instead"
   rm -rf "$WORKDIR"
   mkdir -p "$WORKDIR"
   curl -fsSL "$archive_url" | tar -xz -C "$WORKDIR" --strip-components=1

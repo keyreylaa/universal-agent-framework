@@ -11,7 +11,7 @@ import { walkProject } from "../../core/util.mjs";
 import { loadSkill, frontmatterIssues } from "../../core/skills.mjs";
 import { scanPaths, scanText } from "../../core/secrets.mjs";
 import { gitPreflight } from "../../core/preflight.mjs";
-import { tmpdir, writeTree, cleanupAll, runCli, runCliJson, exists } from "../helpers.mjs";
+import { tmpdir, writeTree, cleanupAll, runCli, runCliJson, exists, sandboxEnv } from "../helpers.mjs";
 
 test.after(cleanupAll);
 
@@ -115,7 +115,7 @@ test("a leftover index lock does not corrupt the index", () => {
 test("install refuses to run without confirmation in a non-interactive shell", () => {
   const project = tmpdir();
   const home = tmpdir();
-  const result = runCli(["install", "--agents", "omp"], { cwd: project, env: { HOME: home, PATH: process.env.PATH }, expectFailure: true });
+  const result = runCli(["install", "--agents", "omp"], { cwd: project, env: sandboxEnv(home), expectFailure: true });
   assert.equal(result.code, 2);
   assert.match(result.stderr, /refusing to proceed without confirmation/);
   assert.deepEqual(fs.readdirSync(project), [], "nothing may be written before confirmation");
@@ -124,7 +124,7 @@ test("install refuses to run without confirmation in a non-interactive shell", (
 test("uninstall refuses to run without confirmation in a non-interactive shell", () => {
   const project = tmpdir();
   const home = tmpdir();
-  const env = { HOME: home, PATH: process.env.PATH };
+  const env = sandboxEnv(home);
   runCli(["install", "--agents", "omp", "--yes"], { cwd: project, env });
   const result = runCli(["uninstall"], { cwd: project, env, expectFailure: true });
   assert.equal(result.code, 2);
@@ -134,7 +134,7 @@ test("uninstall refuses to run without confirmation in a non-interactive shell",
 test("a skill is never installed from a source with invalid frontmatter", () => {
   const project = tmpdir();
   const home = tmpdir();
-  const env = { HOME: home, PATH: process.env.PATH };
+  const env = sandboxEnv(home);
   const plan = runCliJson(["install", "--agents", "claude", "--dry-run"], { cwd: project, env });
   const installed = new Set(plan.skills.map((s) => s.name));
   assert.equal(installed.has("Bad_Name"), false);
@@ -175,7 +175,7 @@ test("scanPaths never reads a private key, it only reports its name", () => {
 test("a repository cannot escalate its own install scope through the manifest", () => {
   const project = tmpdir();
   const home = tmpdir();
-  const env = { HOME: home, PATH: process.env.PATH };
+  const env = sandboxEnv(home);
   runCli(["install", "--agents", "omp", "--yes"], { cwd: project, env });
 
   // A project-local config that asks for a user-scope install must not be honoured

@@ -58,6 +58,13 @@ Claude Code, Codex CLI, and OpenCode adapters are derived from official document
   framework into a cache and hand over to the normal installer, with no clone required. Configurable
   through `UAF_REF`, `UAF_SOURCE`, `UAF_HOME`, and `UAF_TARGET`; works without `git` via a `codeload`
   tarball; refuses to target its own cache.
+- **Bootstrapping**: `get.sh` checks for `curl`, `tar`, and `gzip` before an archive fetch and names
+  the missing one, instead of surfacing `tar`'s truncated-pipe error. The no-`git` `codeload`
+  fallback was exercised against the live repository with a minimal `PATH`.
+- **Portable test entry point**: `tests/run.mjs` expands the suite directories and passes explicit
+  file paths to `node --test`. The previous script relied on glob expansion, which only arrived in
+  Node 21 — on Node 20 the quoted pattern became one literal path, so the run reported nothing
+  found and looked like a pass.
 - **Tests**: unit, integration, security, and end-to-end suites. The end-to-end suite installs
   the skill set and asserts that Oh My Pi's own resolver returns an installed skill, and that
   duplicate copies across two shared roots collapse instead of being namespaced.
@@ -98,6 +105,14 @@ reading it:
 - `uaf prompt` printed the context template without substituting the mode placeholders.
 - Two test fixtures contained credential-shaped literals, so the repository failed its own secret
   scan. Both are now assembled at runtime.
+- The first CI run failed in three distinct ways that local Linux runs could not surface, all in
+  the test harness rather than the product: temp directories were compared un-canonicalised, so
+  macOS's `/var` symlink made install and uninstall appear to disagree; the sandbox overrode
+  `HOME` only, while Node reads `USERPROFILE` on Windows and the per-agent override variables
+  bypass the home directory entirely; and expectations hard-coded POSIX path separators, which
+  Windows does not produce. The harness now returns canonicalised sandbox paths, sets every
+  variable `core/agents.mjs` consults, and builds expectations with `path.resolve`/`path.join`.
+  One wrapper test that invoked a `.sh` file directly is now POSIX-only and runs via `sh`.
 - The first CI run failed on every platform: a test asserted that each agent's user path sits under
   the `home` it passed in, ignoring the documented `XDG_CONFIG_HOME` override that GitHub runners
   set. Reproduced locally with `XDG_CONFIG_HOME` set, then fixed, and two tests now pin the
