@@ -8,6 +8,23 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 
 ### Fixed
 
+- The OpenCode entrypoint was written against the OpenCode 1 plugin API, so OpenCode 2 refused to
+  load it and the project silently ran with no guard. `hooks/opencode-guard.ts` named an export
+  that returned a hook object (`export const UafGuard = async ({ directory }) => ({ "tool.execute.before": … })`);
+  the V2 loader validates a module default export of `{ id, setup(ctx) }` (or `{ id, effect }`) and
+  otherwise fails the plugin with `Plugin must export a default definition with an id and an effect
+  or setup function` and `SchemaError(Missing key at ["default"])` — visible only as a
+  `failed to load plugin` warning in the server log (observed in the field as server-log reference
+  `err_a30e2c8e`). The entrypoint now default-exports `{ id: "uaf-guard", setup }`, reads
+  `ctx.location.directory`, registers `ctx.tool.hook("execute.before", …)` instead of returning a
+  `tool.execute.before` key, blocks by throwing from that callback, and replaces the V1 `event`
+  hook with `ctx.event.subscribe()` (returning its `abort` as the setup cleanup). A plain object is
+  used rather than `Plugin.define`, so the installed file still depends on nothing but the copied
+  `guard-core.mjs`. `docs/troubleshooting.md` and `docs/architecture.md` described the V1 mechanism
+  and now state the V2 load requirement. `tests/integration/install.test.mjs` adds a regression test
+  that imports the installed entrypoint, asserts the `{ id, setup }` shape and the
+  `execute.before` registration, and checks that a catastrophic command is blocked while an ordinary
+  one passes — with the V1 export restored, the import step fails before any hook can run.
 - Documentation asserted things the code does not do. `docs/installation.md` claimed the POSIX
   installer exits 1 at a non-interactive prompt; both wrappers handle the failed `read` explicitly
   and exit 2 — `install.sh` ends its message `Re-run with --yes.`, `uninstall.sh` ends

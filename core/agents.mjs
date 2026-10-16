@@ -197,9 +197,9 @@ export const AGENTS = {
       kind: "opencode-plugin",
       dir: ".opencode/plugin",
       aliases: [".opencode/plugins"],
-      events: ["tool.execute.before", "tool.execute.after", "permission.ask", "event", "chat.params"],
+      events: ["tool.hook:execute.before", "tool.hook:execute.after", "shell.hook:create.before", "session.hook:prompt", "permission.hook:evaluate", "event.subscribe"],
       blockingExitCode: null,
-      verified: "docs/research/opencode.md §4,§10 — no declarative hooks; plugin hooks only.",
+      verified: "docs/research/opencode.md §4 — no declarative hooks; an OpenCode 2 plugin default-exports `{ id, setup }` and registers hooks on a domain (`ctx.tool.hook(\"execute.before\", …)`), not by returning a v1 hook object.",
     },
     permissions: {
       file: ["opencode.json"],
@@ -207,7 +207,7 @@ export const AGENTS = {
     },
     notes: [
       "OpenCode v1 reads `.claude/skills/` natively, so a Claude-targeted skill install also reaches OpenCode.",
-      "A v2 surface with plural config keys coexists; this framework targets the v1 layout, which v2 still accepts.",
+      "V2 still accepts the v1 config layout, but not the v1 plugin implementation: the entrypoint must default-export `{ id, setup }` or the loader refuses it with `Plugin must export a default definition with an id and an effect or setup function`.",
     ],
     runtimeVerified: false,
   },

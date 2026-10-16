@@ -80,7 +80,7 @@ repository-root `AGENTS.md` at the same depth and silently drop the user's own g
 | Codex has no project-level command directory. | Project-scope commands are not installed for Codex; `uaf install` reports this. | Codex's user-scope prompts, or the equivalent skill. |
 | Codex command hooks require a per-definition-hash trust review. | The installed guard does not run until the user approves it in `/hooks`. | `uaf git --commit` and `uaf secrets` run standalone. |
 | Codex hook input/output schema is only partially documented. | The guard's decision protocol for Codex is not runtime-verified. | Treat the Codex guard as advisory; rely on the sandbox and approval policy. |
-| OpenCode has no declarative hooks. | Enforcement requires a TypeScript plugin in `.opencode/plugin/`. | The installed plugin entrypoint, or `uaf` in a git hook. |
+| OpenCode has no declarative hooks. | Enforcement requires a TypeScript plugin in `.opencode/plugin/`, and OpenCode 2 loads it only when the module default-exports `{ id, setup }`. | The installed plugin entrypoint, or `uaf` in a git hook. |
 | Claude Code reads `AGENTS.md` only when no `CLAUDE.md` exists. | A repository with a `CLAUDE.md` needs the block written into that file too. | Handled automatically by the installer. |
 | Only Oh My Pi could be exercised here. | Claude Code, Codex, and OpenCode adapters are unverified at runtime. | Re-run `npm run test:e2e` on a machine with those agents installed. |
 

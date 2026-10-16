@@ -127,8 +127,10 @@ requiring judgement is a review-level note. A guard that
 blocks ordinary work gets disabled, and a disabled guard protects nothing.
 
 Failure behaviour differs by runtime and is documented rather than papered over: Oh My Pi's
-`tool_call` handlers fail closed, Claude Code's exit code 2 blocks the call, and Codex requires a
-one-time trust review before its hooks run at all.
+`tool_call` handlers fail closed, Claude Code's exit code 2 blocks the call, Codex requires a
+one-time trust review before its hooks run at all, and OpenCode 2 loads the plugin only when the
+module default-exports `{ id, setup }` — a definition it cannot load is recorded in the server log
+and skipped rather than silently disabled.
 
 ## Project memory
 

@@ -44,6 +44,53 @@ test("install writes exactly the planned artifacts and never leaves the project"
   assert.deepEqual(fs.readdirSync(home), []);
 });
 
+test("the installed OpenCode plugin is a v2 default definition that enforces the policy", () => {
+  const { projectRoot, env } = sandbox();
+  runCli(["install", "--agents", "opencode", "--yes"], { cwd: projectRoot, env });
+
+  // The entrypoint is authored as TypeScript but carries no type syntax (`@ts-nocheck`,
+  // no annotations), so a copy under a `.mjs` name imports directly. The copy stays in
+  // the same directory, keeping its relative `../../.uaf/hooks/guard-core.mjs` import.
+  const pluginDir = path.join(projectRoot, ".opencode", "plugin");
+  const loadable = path.join(pluginDir, "uaf-guard.probe.mjs");
+  fs.copyFileSync(path.join(pluginDir, "uaf-guard.ts"), loadable);
+
+  const probe = path.join(projectRoot, "load-opencode-plugin.mjs");
+  writeTree(projectRoot, {
+    "load-opencode-plugin.mjs": [
+      'import { pathToFileURL } from "node:url";',
+      "const definition = (await import(pathToFileURL(process.argv[2]).href)).default;",
+      "let registered = null;",
+      "const ctx = {",
+      "  location: { directory: process.argv[3] },",
+      "  tool: { hook: async (name, callback) => { registered = { name, callback }; return { dispose() {} }; } },",
+      "  event: { subscribe: async function* () {} },",
+      "};",
+      "await definition.setup(ctx);",
+      "const observed = { id: definition.id ?? null, setup: typeof definition.setup, hook: registered?.name ?? null };",
+      'try { await registered.callback({ tool: "bash", input: { command: "rm -rf / --no-preserve-root" } }); observed.blocked = false; }',
+      'catch (error) { observed.blocked = /uaf guard blocked/.test(String(error && error.message)); }',
+      'try { await registered.callback({ tool: "bash", input: { command: "npm test" } }); observed.allowed = true; }',
+      "catch { observed.allowed = false; }",
+      "process.stdout.write(JSON.stringify(observed));",
+    ].join("\n"),
+  });
+
+  const stdout = execFileSync(process.execPath, [probe, loadable, projectRoot], {
+    cwd: projectRoot,
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+  });
+  const observed = JSON.parse(stdout);
+  // The load shape is the regression: OpenCode 2 rejects a module without a default
+  // definition, so `id` and `setup` must exist before any hook can run.
+  assert.equal(observed.id, "uaf-guard");
+  assert.equal(observed.setup, "function");
+  assert.equal(observed.hook, "execute.before");
+  assert.equal(observed.blocked, true, "a catastrophic command must be blocked");
+  assert.equal(observed.allowed, true, "an ordinary command must pass");
+});
+
 test("the managed context block is appended, not overwritten, and survives a reinstall", () => {
   const { projectRoot, env } = sandbox();
   writeTree(projectRoot, { "AGENTS.md": "# House rules\n\nNever deploy on Friday.\n" });

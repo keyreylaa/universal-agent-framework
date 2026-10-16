@@ -309,7 +309,7 @@ test("JSON output is complete when stdout is a pipe, not just when it is a file"
   writeTree(projectRoot, tree);
   runCli(["index"], { cwd: projectRoot, env });
 
-  // Measured on Linux: search 392,471 bytes, install 23,045, compat 11,764,
+  // Measured on Linux: search 392,471 bytes, install 23,045, compat 11,920,
   // skills 10,802. Every case clears the 8,154-byte point at which macOS CI
   // truncated, and `search` alone clears Linux's 64 KiB pipe capacity.
   const cases = [
