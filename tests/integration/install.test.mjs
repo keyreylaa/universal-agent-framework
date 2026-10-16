@@ -266,6 +266,74 @@ test("the POSIX wrapper accepts an explicit target directory", { skip: process.p
   assert.deepEqual(fs.readdirSync(home), []);
 });
 
+// --- wrappers with an unanswerable prompt -----------------------------------
+//
+// `read` returns non-zero at EOF, which under `set -eu` aborted the wrapper with
+// that status (1) — the docs claimed 1 for a while, and nothing tested it. Both
+// wrappers handle the failure explicitly now: they print the "no answer on stdin"
+// line, change nothing, and exit 2. The messages differ, so both are asserted.
+
+/** Run a wrapper with a pipe that is already at EOF, as `curl … | sh -s -- …` is. */
+function runWrapperAtEof(script, args, env) {
+  try {
+    const stdout = execFileSync("sh", [script, ...args], {
+      cwd: FRAMEWORK_ROOT,
+      env: { ...process.env, ...env },
+      input: "",
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return { code: 0, stdout, stderr: "" };
+  } catch (error) {
+    return { code: error.status, stdout: error.stdout ?? "", stderr: error.stderr ?? "" };
+  }
+}
+
+/** Every path under `root` mapped to its bytes, so "untouched" is a real comparison. */
+function snapshot(root) {
+  const files = new Map();
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isSymbolicLink()) files.set(path.relative(root, full), `symlink:${fs.readlinkSync(full)}`);
+      else files.set(path.relative(root, full), fs.readFileSync(full));
+    }
+  };
+  walk(root);
+  return files;
+}
+
+test("install.sh exits 2 at an unanswerable prompt and writes nothing", { skip: process.platform === "win32" && "POSIX wrapper" }, () => {
+  const { projectRoot, home, env } = sandbox();
+  const result = runWrapperAtEof(path.join(FRAMEWORK_ROOT, "scripts", "install.sh"), ["--cwd", projectRoot, "--agents", "omp"], env);
+
+  assert.equal(result.code, 2, `install.sh exited ${result.code} instead of 2: ${result.stderr}`);
+  assert.match(result.stdout, /no answer on stdin \(piped input\?\); nothing was changed\./);
+  assert.match(result.stdout, /Re-run with --yes\./);
+  // The plan is printed before the prompt; the prompt is where it stops.
+  assert.match(result.stdout, /Apply this plan\? \[y\/N\]/);
+  assert.deepEqual(fs.readdirSync(projectRoot), []);
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test("uninstall.sh exits 2 at an unanswerable prompt and removes nothing", { skip: process.platform === "win32" && "POSIX wrapper" }, () => {
+  const { projectRoot, home, env } = sandbox();
+  runCli(["install", "--agents", "omp", "--yes"], { cwd: projectRoot, env });
+  const before = snapshot(projectRoot);
+  assert.ok(before.size > 0, "the fixture install is empty, so this test would prove nothing");
+
+  const result = runWrapperAtEof(path.join(FRAMEWORK_ROOT, "scripts", "uninstall.sh"), ["--cwd", projectRoot], env);
+
+  assert.equal(result.code, 2, `uninstall.sh exited ${result.code} instead of 2: ${result.stderr}`);
+  assert.match(result.stdout, /no answer on stdin \(piped input\?\); nothing was changed\./);
+  assert.match(result.stdout, /Re-run the CLI with --yes\./);
+  // The wrapper asks before invoking the CLI, so a refusal must leave the install intact.
+  assert.deepEqual(snapshot(projectRoot), before);
+  assert.ok(exists(path.join(projectRoot, ".uaf", "install.json")));
+  assert.deepEqual(fs.readdirSync(home), []);
+});
+
 // --- curl-style bootstrap ---------------------------------------------------
 
 function runGetScript({ args, source, cache, env, input = null }) {

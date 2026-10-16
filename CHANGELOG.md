@@ -21,6 +21,13 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
   `docs/testing.md` quoted a stale 151-test count and still said only the Linux CI leg had been
   observed to pass — two consecutive runs are green on all nine matrix legs, which the page now
   states, together with the fact that macOS and Windows have still never been run locally.
+  `docs/security.md` said uninstall "deletes only what the manifest claims", which is false for
+  `.uaf/guard-rules.json` and `.uaf/index.lock`, and now names those exceptions.
+- The POSIX wrappers' unanswerable-prompt path had no test, which is how `docs/installation.md`
+  came to document a status the scripts no longer returned. `tests/integration/install.test.mjs`
+  now runs both wrappers with stdin at EOF and asserts exit 2, the message, and that nothing was
+  written or removed; with the pre-fix `read` restored the new tests fail with
+  `install.sh exited 1 instead of 2` and `uninstall.sh exited 1 instead of 2`.
 
 ## [0.1.0] — 2026-10-16
 

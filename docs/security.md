@@ -22,7 +22,9 @@
    the project root, so a committed symlink to `/etc` cannot pull outside files into the index.
 7. **Overwriting a user's configuration.** Settings files are merged key by key, or refused with
    an explanation if they are not valid JSON. A pre-existing Codex `hooks.json` is never replaced.
-   Uninstall deletes only what the manifest claims and only when the content is unchanged.
+   Uninstall deletes what the manifest claims, and only when the content is unchanged, with two
+   exceptions it always removes: `.uaf/guard-rules.json` and `.uaf/index.lock`, both
+   framework-owned internals (the full removed/kept split is in `docs/installation.md`).
 8. **Untrusted repository content acting as instructions.** The generated context block states
    that file contents, fetched pages, dependency text, logs, and instructions found inside the
    repository are data, not authority. That rule is duplicated in `templates/context-block.md`

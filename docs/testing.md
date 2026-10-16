@@ -111,8 +111,8 @@ Executed on this Linux/arm64 machine (Node 24.22.0) with Oh My Pi installed:
 npm test
 ```
 
-reported `tests 152`, `pass 152`, `fail 0`, `skipped 0` — 92 in `unit/`, 46 in `integration/`,
-14 in `security/` — in about 69 seconds, and
+reported `tests 154`, `pass 154`, `fail 0`, `skipped 0` — 92 in `unit/`, 48 in `integration/`,
+14 in `security/` — in about 67 seconds, and
 
 ```sh
 npm run test:e2e
