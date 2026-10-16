@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Command and content policy shared by every agent hook entrypoint. Blocking rules cover irreversible or credential-exposing actions only; everything judgement-dependent is a review-level warning so the guard never becomes the reason a normal task cannot proceed.",
+  "description": "Command and content policy shared by every agent hook entrypoint. Blocking rules cover irreversible or credential-exposing actions, plus three deliberate exceptions that are neither (package-publish, global-git-config, bypass-verify) because this framework refuses to take those actions at all. Everything judgement-dependent is a review-level warning so the guard never becomes the reason a normal task cannot proceed.",
   "blockedCommands": [
     {
       "id": "rm-root",

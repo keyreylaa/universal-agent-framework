@@ -6,6 +6,22 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 
 ## [Unreleased]
 
+### Fixed
+
+- Documentation asserted things the code does not do. `docs/installation.md` claimed the POSIX
+  installer exits 1 at a non-interactive prompt; both wrappers handle the failed `read` explicitly
+  and exit 2 — `install.sh` ends its message `Re-run with --yes.`, `uninstall.sh` ends
+  `Re-run the CLI with --yes.`. `docs/architecture.md` claimed four `node:` builtins and three
+  files where the measured runtime is seven builtins, twelve modules in `core/`, and five files in
+  `hooks/`, and its "every mutation is recorded" invariant omitted the two framework-owned files
+  uninstall removes regardless of the manifest, `.uaf/guard-rules.json` and `.uaf/index.lock`.
+  The blocking rules were described as covering *only* irreversible or credential-exposing actions;
+  `package-publish`, `global-git-config`, and `bypass-verify` are neither and are now named
+  (`README.md`, `docs/architecture.md`, `hooks/guard-rules.json`, `hooks/guard-core.mjs`).
+  `docs/testing.md` quoted a stale 151-test count and still said only the Linux CI leg had been
+  observed to pass — two consecutive runs are green on all nine matrix legs, which the page now
+  states, together with the fact that macOS and Windows have still never been run locally.
+
 ## [0.1.0] — 2026-10-16
 
 Initial release. Only Oh My Pi could be exercised end to end in the development environment; the
@@ -41,9 +57,9 @@ Claude Code, Codex CLI, and OpenCode adapters are derived from official document
   secret scanning, real CI run status, inactive workflow detection, and explicit reporting that a
   workflow file is not evidence CI works.
 - **Hook guard**: one JSON policy, four native entrypoints (stdin JSON for Claude Code and Codex,
-  an Oh My Pi extension, an OpenCode plugin). Blocks only irreversible or credential-exposing
-  commands; everything judgement-dependent is a review note. Reason-level details are in
-  `docs/security.md`.
+  an Oh My Pi extension, an OpenCode plugin). Blocks irreversible or credential-exposing commands,
+  plus `package-publish`, `global-git-config`, and `bypass-verify`; everything judgement-dependent
+  is a review note. Reason-level details are in `docs/security.md`.
 - **Three modes**: `lite`, `full`, `ultra`, plus risk-based `uaf mode suggest` scoring the files a
   task touches rather than the size of the repository.
 - **Skills**: 13 authored skills — code quality, dependency decisions, language references for

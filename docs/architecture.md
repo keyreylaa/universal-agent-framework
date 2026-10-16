@@ -60,7 +60,10 @@ These hold everywhere and are enforced by tests. Breaking one is a bug, not a de
    This is what makes `--dry-run` an honest preview rather than a slogan, and it is why the
    installer can be tested without a filesystem side effect.
 2. **Every mutation is recorded.** `applyPlan` writes one manifest entry per action, keyed by
-   `type|target`. Uninstall never deletes anything the manifest does not claim.
+   `type|target`. Uninstall never deletes anything the manifest does not claim, with two named
+   exceptions: `.uaf/guard-rules.json` and `.uaf/index.lock` are removed unconditionally, because
+   they are framework-owned internal artifacts rather than anything the user put there. The full
+   removed/kept split is in `docs/installation.md`.
 3. **Drift is preserved, never overwritten.** Content that changed after install is reported and
    left alone on removal. Reinstalling is an explicit act.
 4. **Writes stay inside the declared scope.** A project-scope install must not touch the user's
@@ -117,8 +120,10 @@ hooks/opencode-guard.ts     entrypoint for the OpenCode plugin loader
 ```
 
 The policy is data so it can be tightened or relaxed without editing code, and so the same policy
-applies identically on every runtime. Blocking rules cover only irreversible or
-credential-exposing actions; everything requiring judgement is a review-level note. A guard that
+applies identically on every runtime. Blocking rules cover irreversible or credential-exposing
+actions, plus three deliberate exceptions that are neither — `package-publish`, `global-git-config`,
+and `bypass-verify` — because the framework refuses to take those actions at all. Everything else
+requiring judgement is a review-level note. A guard that
 blocks ordinary work gets disabled, and a disabled guard protects nothing.
 
 Failure behaviour differs by runtime and is documented rather than papered over: Oh My Pi's
@@ -166,7 +171,8 @@ raise it; tests lower it — and `suggestMode` reports both the recommendation a
 
 ## What is intentionally absent
 
-- No dependency graph. Four `node:` builtins and three files is the whole runtime.
+- No dependency graph. Seven `node:` builtins (`child_process`, `crypto`, `fs`, `os`, `path`,
+  `readline`, `url`), twelve modules in `core/`, and five files in `hooks/` are the whole runtime.
 - No plugin sandbox. Extension code is trusted code; the framework's own guarantees stop at the
   files it writes.
 - No vector database, no embeddings service, no background daemon.

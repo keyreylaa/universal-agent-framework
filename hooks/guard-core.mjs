@@ -1,9 +1,11 @@
 // Guard policy shared by every agent hook entrypoint.
 //
-// Design: blocking rules cover only irreversible or credential-exposing actions.
-// Everything requiring judgement is a review-level warning, so a normal task is
-// never blocked by the guard. The rules file is data, not code, so operators can
-// tighten or relax policy without editing the entrypoints.
+// Design: blocking rules cover irreversible or credential-exposing actions, plus
+// three deliberate exceptions (package-publish, global-git-config, bypass-verify)
+// that the framework refuses to do at all. Everything requiring judgement is a
+// review-level warning, so a normal task is never blocked by the guard. The rules
+// file is data, not code, so operators can tighten or relax policy without editing
+// the entrypoints.
 
 import fs from "node:fs";
 import path from "node:path";

@@ -93,9 +93,11 @@ not installed.
   re-run the CLI with `--yes`. Any other answer prints `aborted; nothing was changed.` and exits 0.
 - With `--dry-run` it execs `install … --dry-run` and writes nothing.
 - `--yes` skips the question; this is the only non-interactive-safe path through the wrapper.
-  Because the script runs under `set -eu`, a wrapper invocation without `--yes` and without a
-  terminal terminates at the prompt with the status `read` reports (1). The exit **2** refusal
-  described below belongs to the CLI process itself.
+  Without `--yes` and without a terminal, `read` reaches EOF: the script prints
+  `no answer on stdin (piped input?); nothing was changed. Re-run with --yes.` and exits **2**.
+  That 2 is the wrapper's own, not the CLI's refusal described below — the failed `read` is handled
+  explicitly rather than left to `set -eu`, and the CLI is never invoked. Any answer other than
+  `y`/`yes` prints `aborted; nothing was changed.` and exits 0.
 
 ### `scripts/install.ps1`
 
@@ -348,6 +350,10 @@ node core/cli.mjs uninstall [--scope project|user] [--purge] [--yes]
   `-Yes` only for its own prompt). Their `--yes` therefore does not make removal unattended: use
   `node core/cli.mjs uninstall --yes` for that. On an interactive terminal the CLI asks a second
   time after the wrapper's prompt.
+- At EOF — no `--yes` and no terminal — `uninstall.sh` prints `no answer on stdin (piped input?);
+  nothing was changed. Re-run the CLI with --yes.` and exits **2**, again before the CLI runs. The
+  wording differs from `install.sh`, which ends `Re-run with --yes.`; the two scripts were fixed
+  separately.
 - With no manifest at the scope root it prints `nothing to uninstall: no manifest at <scopeRoot>`
   and exits 0; a second run is safe and reports `removed: []`.
 - Removal is manifest-driven and hash-checked:

@@ -24,13 +24,15 @@ type.
   selected agents, so all four agents are served by `.claude/skills` and `.agents/skills` rather
   than four duplicated copies.
 - **Exact removal.** Every mutation is recorded in an ownership manifest. Uninstall reverses it
-  and *preserves* anything edited by hand, reporting what it kept and why.
+  and *preserves* anything edited by hand, reporting what it kept and why; only two framework-owned
+  internals, `.uaf/guard-rules.json` and `.uaf/index.lock`, are cleared unconditionally.
 - **Real verification.** `uaf git --commit` inspects the staged index blobs and `uaf gh` inspects
   the outgoing commit range, so a credential already deleted from disk is still caught.
 - **Deterministic project memory.** A no-embeddings index with incremental rebuilds, secret
   exclusion before any read, atomic writes, and crash-safe recovery.
 - **A hook policy with one source of truth.** One JSON rule set, four native entrypoints, blocking
-  only what is irreversible or credential-exposing.
+  what is irreversible or credential-exposing — plus `package-publish`, `global-git-config`, and
+  `bypass-verify`, which the framework refuses to do at all.
 - **Three verification modes** whose depth is driven by assessed risk, not by enthusiasm.
 - **Zero runtime dependencies.** `node:` builtins only. No build step.
 
@@ -182,8 +184,8 @@ sandboxed `HOME`, so they never touch your real configuration directories.
 - Credential scanning covers the staged index and the outgoing commit range, not just the working
   tree.
 - Secret-named files are never read by the indexer, so they cannot reach a prompt or a memory note.
-- The hook policy blocks destructive and credential-exposing commands and warns on the rest; it is
-  a guard, not a sandbox.
+- The hook policy blocks destructive and credential-exposing commands — plus publishing, global Git
+  config changes, and `--no-verify` — and warns on the rest; it is a guard, not a sandbox.
 - A clean scan is not proof of security, and this framework claims no such thing.
 
 Read `docs/security.md` before relying on any of it, and `SECURITY.md` to report a problem.

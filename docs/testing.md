@@ -111,18 +111,20 @@ Executed on this Linux/arm64 machine (Node 24.22.0) with Oh My Pi installed:
 npm test
 ```
 
-reported `tests 151`, `pass 151`, `fail 0`, `skipped 0` in about 83 seconds, and
+reported `tests 152`, `pass 152`, `fail 0`, `skipped 0` — 92 in `unit/`, 46 in `integration/`,
+14 in `security/` — in about 69 seconds, and
 
 ```sh
 npm run test:e2e
 ```
 
-reported `tests 2`, `pass 2`, `fail 0`, `skipped 0` in about 23 seconds — Oh My Pi is installed
+reported `tests 2`, `pass 2`, `fail 0`, `skipped 0` in about 18–25 seconds — Oh My Pi is installed
 here, so the two e2e tests ran rather than skipping. The launcher itself was checked directly:
 `node tests/run.mjs tests/unit` reported `tests 92`, `pass 92`, `fail 0` and exited `0`, while
 `node tests/run.mjs tests/does-not-exist` printed `tests/run.mjs: suite directory not found:
 tests/does-not-exist` and exited `2`. These are single runs on one machine; they are not statements
-about other platforms.
+about other platforms, and the timings move by tens of seconds with machine load — the counts are
+the stable part.
 
 ## Cross-platform reality
 
@@ -136,8 +138,15 @@ each agent user path sits under the `home` it was passed, while `resolvePaths` l
 `PI_CODING_AGENT_DIR` — and GitHub runners set `XDG_CONFIG_HOME`. The failure was reproduced
 locally by running the suite with `XDG_CONFIG_HOME` set (148 passed, 1 failed, matching CI), then
 fixed by passing an explicit environment to that assertion and adding two tests that pin the
-override behaviour. The same local run then passed 151/151.
+override behaviour; that run passed 151/151, the total the suite had at the time. The pipe-safety
+test added afterwards (`JSON output is complete when stdout is a pipe, not just when it is a file`)
+is the 152nd.
 
-Only the Linux leg has been observed to pass. Windows and macOS are exercised by CI alone; do not
-claim cross-platform support that has not been demonstrated. CI run conclusions are visible with
-`node core/cli.mjs gh`, which reports real run status rather than the presence of a workflow file.
+What is observed now: CI runs 38872156800 (`0f147ac`) and 38873018231 (`0d8647f`) report all nine
+matrix legs — `ubuntu-latest`, `macos-latest`, and `windows-latest` with Node 20, 22, and 24 — and
+the e2e job as success. The macOS and Windows legs have never been executed on this machine, so CI
+is the only evidence for them; every local figure in this document is Linux-only. The earlier
+failures were real, they are recorded above and in the CHANGELOG, and they are why the harness
+carries a canonicalising `tmpdir()`, a fully overridden `sandboxEnv()`, and its own suite launcher.
+CI run conclusions are visible with `node core/cli.mjs gh`, which reports real run status rather
+than the presence of a workflow file.
