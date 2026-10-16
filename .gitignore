@@ -1,0 +1,11 @@
+node_modules/
+*.log
+.DS_Store
+
+# Framework runtime state (project-scoped, machine-local)
+.uaf/cache/
+.uaf/index.json
+.uaf/*.lock
+
+# Test scratch space
+tests/.tmp/

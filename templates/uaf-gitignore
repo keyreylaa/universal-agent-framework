@@ -1,0 +1,12 @@
+# Machine-local state. The manifest marks these as owned by the framework install.
+install.json
+framework/
+hooks/
+guard-rules.json
+index.json
+index.lock
+cache/
+
+# Kept under version control on purpose:
+#   config.json  — the project's chosen mode and agent selection
+#   memory/      — decisions and constraints recorded with `uaf remember`

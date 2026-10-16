@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "description": "Command and content policy shared by every agent hook entrypoint. Blocking rules cover irreversible or credential-exposing actions only; everything judgement-dependent is a review-level warning so the guard never becomes the reason a normal task cannot proceed.",
+  "blockedCommands": [
+    {
+      "id": "rm-root",
+      "pattern": "\\brm\\s+(?:-[a-zA-Z]+\\s+)*-[a-zA-Z]*[rf][a-zA-Z]*\\s+(?:--\\s+)?(?:/|/\\*|~|~/\\*|\\$HOME/?\\*?)(?:\\s|$)",
+      "reason": "Recursive force-delete targeting the filesystem root or the home directory."
+    },
+    {
+      "id": "rm-variable-root",
+      "pattern": "\\brm\\s+[^|;&]*-[a-zA-Z]*[rf][a-zA-Z]*[^|;&]*\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?/?(?:\\s|$)",
+      "reason": "Recursive force-delete with an unquoted variable path; if the variable is empty this deletes the working directory or worse. Expand the path explicitly first."
+    },
+    {
+      "id": "mkfs",
+      "pattern": "\\bmkfs(?:\\.\\w+)?\\b",
+      "reason": "Filesystem creation destroys everything on the target device."
+    },
+    {
+      "id": "dd-to-device",
+      "pattern": "\\bdd\\b[^|;&]*\\bof=/dev/",
+      "reason": "Raw write to a block device."
+    },
+    {
+      "id": "fork-bomb",
+      "pattern": ":\\(\\)\\s*\\{\\s*:\\|:&\\s*\\}\\s*;\\s*:",
+      "reason": "Fork bomb."
+    },
+    {
+      "id": "pipe-download-to-shell",
+      "pattern": "\\b(?:curl|wget)\\b[^|]*\\|\\s*(?:sudo\\s+)?(?:ba|z|da|k)?sh\\b",
+      "reason": "Executing a downloaded script. Fetch it, read it, and get approval before running it.",
+      "exemptPattern": "--dry-run"
+    },
+    {
+      "id": "chmod-world-writable-root",
+      "pattern": "\\bchmod\\s+(?:-[a-zA-Z]+\\s+)*0?777\\s+/(?:\\s|$)",
+      "reason": "World-writable permission on the filesystem root."
+    },
+    {
+      "id": "force-push-protected-branch",
+      "pattern": "\\bgit\\s+push\\b[^|;&]*(?:--force(?!-with-lease)|-f\\b)[^|;&]*\\b(?:main|master|trunk|release\\S*)\\b",
+      "reason": "Force-push to a shared branch rewrites history other people already have. Ask the user; use --force-with-lease on a feature branch instead."
+    },
+    {
+      "id": "gh-repo-delete",
+      "pattern": "\\bgh\\s+repo\\s+delete\\b",
+      "reason": "Deleting a remote repository is irreversible and remote."
+    },
+    {
+      "id": "package-publish",
+      "pattern": "\\b(?:npm|pnpm|yarn)\\s+publish\\b|\\bcargo\\s+publish\\b|\\btwine\\s+upload\\b|\\bgh\\s+release\\s+create\\b",
+      "reason": "Publishing is an externally visible release action and needs explicit user authorization."
+    },
+    {
+      "id": "global-git-config",
+      "pattern": "\\bgit\\s+config\\s+--global\\b",
+      "reason": "This framework never modifies global Git configuration. Set repository-local config instead."
+    },
+    {
+      "id": "history-rewrite",
+      "pattern": "\\bgit\\s+(?:filter-branch|filter-repo)\\b",
+      "reason": "Blanket history rewriting; if a secret needs removing, do it deliberately with a reviewed plan."
+    },
+    {
+      "id": "secret-exfiltration",
+      "pattern": "\\b(?:cat|less|head|tail|base64|xxd|curl\\s+-d\\s+@)\\b[^|;&]*(?:\\.env\\b|\\.env\\.[\\w.]+|id_rsa|id_ed25519|\\.aws/credentials|\\.npmrc|\\.netrc|\\.git-credentials)\\b",
+      "reason": "Reading or uploading a credential file. Credentials must not enter logs, prompts, or network calls."
+    },
+    {
+      "id": "bypass-verify",
+      "pattern": "\\bgit\\s+(?:commit|push)\\b[^|;&]*--no-verify\\b",
+      "reason": "Bypassing hooks to force a commit through. Fix what the hook is complaining about."
+    }
+  ],
+  "reviewCommands": [
+    { "id": "sudo", "pattern": "\\bsudo\\b", "reason": "Privilege escalation." },
+    { "id": "recursive-delete", "pattern": "\\brm\\s+(?:-[a-zA-Z]+\\s+)*-[a-zA-Z]*[rf][a-zA-Z]*\\b", "reason": "Recursive delete: confirm the exact path." },
+    { "id": "git-reset-hard", "pattern": "\\bgit\\s+reset\\s+--hard\\b", "reason": "Discards uncommitted work permanently." },
+    { "id": "git-clean-force", "pattern": "\\bgit\\s+clean\\b[^|;&]*-[a-zA-Z]*[fdx]", "reason": "Deletes untracked and ignored files irrecoverably." },
+    { "id": "package-install", "pattern": "\\b(?:npm|pnpm|yarn)\\s+(?:install|add|i)\\b|\\bpip3?\\s+install\\b|\\bcargo\\s+add\\b|\\bgo\\s+get\\b|\\bcomposer\\s+require\\b", "reason": "Dependency change: confirm the dependency decision first (see the engineering-dependencies skill)." },
+    { "id": "docker-privileged", "pattern": "\\bdocker\\b[^|;&]*--privileged\\b", "reason": "Privileged container with host access." },
+    { "id": "dangerous-agent-flags", "pattern": "--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--yolo\\b", "reason": "Runtime safety bypass." },
+    { "id": "network-fetch", "pattern": "\\b(?:curl|wget)\\b", "reason": "Outbound network fetch: confirm the destination is expected." },
+    { "id": "history-write", "pattern": "\\bgit\\s+push\\b|\\bgh\\s+pr\\s+create\\b", "reason": "Remote publication step." }
+  ],
+  "blockedPathWrites": [
+    { "pattern": "(^|/)\\.ssh/", "reason": "Writing into ~/.ssh." },
+    { "pattern": "(^|/)\\.aws/credentials$", "reason": "Writing AWS credentials." },
+    { "pattern": "(^|/)\\.git/config$", "reason": "Hand-editing repository Git config." }
+  ]
+}

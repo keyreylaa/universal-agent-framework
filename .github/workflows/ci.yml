@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ["20", "22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Unit, integration, and security tests
+        run: npm test
+      - name: Verify the skill set validates and stays within the context budget
+        run: node core/cli.mjs skills --json
+      - name: Verify the capability matrix is internally consistent
+        run: node core/cli.mjs compat --json
+
+  e2e:
+    name: e2e (agent discovery)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The end-to-end suite skips itself when no supported agent is installed.
+      - run: npm run test:e2e
