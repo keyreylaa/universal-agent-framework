@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-import { tmpdir, writeTree, cleanupAll, runCli, runCliJson, sandbox as makeSandbox, initRepo, FRAMEWORK_ROOT, exists, readIfExists } from "../helpers.mjs";
+import { tmpdir, writeTree, cleanupAll, runCli, runCliJson, sandbox as makeSandbox, initRepo, FRAMEWORK_ROOT, CLI, exists, readIfExists } from "../helpers.mjs";
 
 test.after(cleanupAll);
 
@@ -286,4 +286,55 @@ test("index.exclude from project config is applied to the index", () => {
   assert.deepEqual(found.results, []);
   const app = runCliJson(["search", "app.js"], { cwd: projectRoot, env });
   assert.ok(app.results.length >= 1);
+});
+
+test("JSON output is complete when stdout is a pipe, not just when it is a file", () => {
+  // `process.exit()` discards asynchronously buffered piped stdout. macOS's pipe
+  // capacity is 16 KiB and Linux's is 64 KiB, so CI truncated `--json` output
+  // mid-string on macOS while Linux passed. Writing to a file is synchronous and
+  // never truncated, so comparing pipe output against file output pins the
+  // invariant on every platform — provided the output exceeds the pipe capacity.
+  const { projectRoot, env } = sandbox();
+
+  // Enough matches that the JSON is several times Linux's 64 KiB pipe capacity,
+  // which is what makes this test fail without the flush rather than merely
+  // exercising it.
+  const tree = {};
+  for (let i = 0; i < 1200; i += 1) {
+    const id = String(i).padStart(4, "0");
+    tree[`src/mod-${id}.ts`] = `export function sharedRetryHelper${id}(attempts: number) {\n  return attempts;\n}\n`;
+  }
+  writeTree(projectRoot, tree);
+  runCli(["index"], { cwd: projectRoot, env });
+
+  const cases = [
+    ["search", "sharedRetryHelper", "--limit", "1200", "--json"],
+    ["compat", "--json"],
+    ["skills", "--json"],
+    // Generates the largest of the install plans, which alone exceeds macOS's limit.
+    ["install", "--agents", "claude,codex,opencode,omp", "--dry-run", "--json"],
+  ];
+
+  for (const args of cases) {
+    const piped = runCli([...args, "--cwd", projectRoot], { cwd: projectRoot, env }).stdout;
+    const file = path.join(projectRoot, `out-${args[0]}.json`);
+    const quoted = args.map((a) => `'${a}'`).join(" ");
+    execFileSync("sh", ["-c", `node '${CLI}' ${quoted} --cwd '${projectRoot}' > '${file}'`], {
+      cwd: projectRoot,
+      env: { ...process.env, ...env },
+      encoding: "utf8",
+    });
+    const written = fs.readFileSync(file, "utf8");
+    assert.ok(
+      piped.length === written.length,
+      `${args[0]}: pipe produced ${piped.length} bytes but a file produced ${written.length}`,
+    );
+    assert.doesNotThrow(() => JSON.parse(piped), `${args[0]} produced unparseable JSON on a pipe`);
+    assert.ok(piped.endsWith("\n"), `${args[0]} output must end with a newline`);
+  }
+
+  // Guard the guard: if no command exceeds the smaller pipe capacity, this test
+  // would pass with the bug present and stop protecting anything.
+  const largest = runCli(["search", "sharedRetryHelper", "--limit", "1200", "--json", "--cwd", projectRoot], { cwd: projectRoot, env }).stdout.length;
+  assert.ok(largest > 64 * 1024, `the largest output is ${largest} bytes, under Linux's 64 KiB pipe capacity`);
 });

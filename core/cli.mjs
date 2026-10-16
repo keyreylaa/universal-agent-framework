@@ -721,10 +721,21 @@ async function main() {
   }
 }
 
+/**
+ * Exit through `process.exitCode` rather than `process.exit()`.
+ *
+ * When stdout is a pipe, Node writes to it asynchronously: `process.exit()`
+ * terminates before the buffer drains, so anything past the pipe capacity is
+ * lost. On macOS the pipe capacity is 16 KiB, which truncated `--json` output
+ * mid-string; the Linux capacity is 64 KiB, which is why local runs never saw it.
+ * Setting the code lets Node flush and then exit on its own.
+ */
 main().then(
-  (code) => process.exit(code),
+  (code) => {
+    process.exitCode = code;
+  },
   (error) => {
     process.stderr.write(`uaf: fatal: ${error?.stack ?? error}\n`);
-    process.exit(EXIT.FINDINGS);
+    process.exitCode = EXIT.FINDINGS;
   },
 );

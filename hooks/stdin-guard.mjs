@@ -43,12 +43,17 @@ if (command === null) process.exit(0);
 const { rules, error } = loadRules(moduleDir(import.meta.url));
 if (!rules) {
   process.stderr.write(`uaf guard: ${error}; no command policy applied\n`);
-  process.exit(0);
 }
 
-const verdict = evaluateCommand(command, rules);
+const verdict = rules ? evaluateCommand(command, rules) : null;
 
-if (verdict.decision === "block") {
+// Exit through `process.exitCode`, never `process.exit()`: piped stdout and
+// stderr are written asynchronously, so an explicit exit can discard a decision
+// payload that has not flushed — on macOS a pipe holds only 16 KiB. A dropped
+// decision is worse than a slow one: the agent would see neither the block nor
+// its reason. Setting the code lets Node drain the pipes and exit on its own;
+// the blocked path still reports code 2.
+if (verdict?.decision === "block") {
   process.stdout.write(
     `${JSON.stringify({
       decision: "block",
@@ -57,10 +62,10 @@ if (verdict.decision === "block") {
     })}\n`,
   );
   process.stderr.write(`uaf guard blocked ${toolName}: ${verdict.reason}\n`);
-  process.exit(2);
+  process.exitCode = 2;
 }
 
-if (verdict.decision === "review") {
+if (verdict?.decision === "review") {
   process.stdout.write(
     `${JSON.stringify({
       systemMessage: `uaf guard: review before running — ${verdict.reason}`,
@@ -69,4 +74,6 @@ if (verdict.decision === "review") {
   );
 }
 
-process.exit(0);
+// Allowed, reviewed, and policy-less runs fall out with the default code 0.
+// The two `process.exit(0)` calls above cannot truncate anything: they run
+// before the first byte is written to stdout or stderr.
