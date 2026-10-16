@@ -98,3 +98,8 @@ reading it:
 - `uaf prompt` printed the context template without substituting the mode placeholders.
 - Two test fixtures contained credential-shaped literals, so the repository failed its own secret
   scan. Both are now assembled at runtime.
+- The first CI run failed on every platform: a test asserted that each agent's user path sits under
+  the `home` it passed in, ignoring the documented `XDG_CONFIG_HOME` override that GitHub runners
+  set. Reproduced locally with `XDG_CONFIG_HOME` set, then fixed, and two tests now pin the
+  override precedence. `actions/checkout` and `actions/setup-node` moved to v5, since runners no
+  longer provide the Node 20 runtime those actions targeted.

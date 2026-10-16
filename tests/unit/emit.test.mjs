@@ -14,7 +14,10 @@ test.after(cleanupAll);
 
 test("every agent resolves a coherent path set", () => {
   for (const id of AGENT_IDS) {
-    const paths = resolvePaths(id, { projectRoot: "/repo", home: "/home/u" });
+    // `env: {}` keeps the assertion independent of the runner: XDG_CONFIG_HOME,
+    // CLAUDE_CONFIG_DIR, CODEX_HOME, and OPENCODE_CONFIG_DIR legitimately relocate
+    // these roots, and GitHub runners set XDG_CONFIG_HOME.
+    const paths = resolvePaths(id, { projectRoot: "/repo", home: "/home/u", env: {} });
     assert.equal(paths.id, id);
     assert.ok(paths.skillsUser.startsWith("/home/u"), `${id} user skills root`);
     assert.ok(paths.skillsProject.startsWith("/repo"), `${id} project skills root`);
@@ -245,4 +248,35 @@ test("installing into a sandbox home never writes outside the sandbox", async ()
       `${action.target} escapes the sandbox (real home is ${before})`,
     );
   }
+});
+
+test("documented environment overrides relocate the user roots", () => {
+  const cases = [
+    { id: "claude", env: { CLAUDE_CONFIG_DIR: "/cl" }, root: "/cl", skills: "/cl/skills" },
+    { id: "opencode", env: { XDG_CONFIG_HOME: "/xdg" }, root: "/xdg/opencode", skills: "/xdg/opencode/skills" },
+    { id: "opencode", env: { OPENCODE_CONFIG_DIR: "/oc" }, root: "/oc", skills: "/oc/skills" },
+    { id: "omp", env: { PI_CODING_AGENT_DIR: "/omp" }, root: "/omp", skills: "/omp/skills" },
+    // Codex is the exception on purpose: CODEX_HOME holds config, auth, and prompts,
+    // while its documented user skill location is $HOME/.agents/skills.
+    { id: "codex", env: { CODEX_HOME: "/cx" }, root: "/cx", skills: "/home/u/.agents/skills", commands: "/cx/prompts" },
+  ];
+  for (const { id, env, root, skills, commands } of cases) {
+    const paths = resolvePaths(id, { projectRoot: "/repo", home: "/home/u", env });
+    assert.equal(paths.userRoot, root, `${id} userRoot`);
+    assert.equal(paths.skillsUser, skills, `${id} skillsUser`);
+    if (commands) assert.equal(paths.commandsUser, commands, `${id} commandsUser`);
+  }
+});
+
+test("a named profile selects its own agent directory and env wins over home", () => {
+  const profiled = resolvePaths("omp", { projectRoot: "/repo", home: "/home/u", env: { OMP_PROFILE: "work" } });
+  assert.equal(profiled.userRoot, "/home/u/.omp/profiles/work/agent");
+
+  // An explicit agent dir is stronger than a profile, matching the documented order.
+  const explicit = resolvePaths("omp", {
+    projectRoot: "/repo",
+    home: "/home/u",
+    env: { OMP_PROFILE: "work", PI_CODING_AGENT_DIR: "/custom" },
+  });
+  assert.equal(explicit.userRoot, "/custom");
 });

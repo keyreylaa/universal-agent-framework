@@ -94,7 +94,7 @@ Executed on this Linux/arm64 machine, Node from the workspace, with no agent ins
 node --test "tests/unit/*.test.mjs" "tests/integration/*.test.mjs" "tests/security/*.test.mjs"
 ```
 
-reported `tests 149`, `pass 149`, `fail 0`, `skipped 0` in about 62 seconds, and
+reported `tests 151`, `pass 151`, `fail 0`, `skipped 0` in about 65 seconds, and
 
 ```sh
 npm run test:e2e
@@ -107,6 +107,16 @@ single runs on one machine; they are not statements about other platforms.
 
 The suite runs on Linux here. The CI workflow (`.github/workflows/ci.yml`) defines a matrix over
 `ubuntu-latest`, `macos-latest`, and `windows-latest` with Node 20, 22, and 24, plus a separate
-Ubuntu e2e job. The Windows and macOS legs are exercised only by that CI, and their passing has not
-been observed — do not claim cross-platform support that has not been demonstrated. The e2e job runs
-on `ubuntu-latest` only, where no agent is installed, so it skips there.
+Ubuntu e2e job that skips itself because no agent is installed on a runner.
+
+The first CI run failed on every platform. The cause was a test, not the product: it asserted that
+each agent user path sits under the `home` it was passed, while `resolvePaths` legitimately honours
+`XDG_CONFIG_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `OPENCODE_CONFIG_DIR`, and
+`PI_CODING_AGENT_DIR` — and GitHub runners set `XDG_CONFIG_HOME`. The failure was reproduced
+locally by running the suite with `XDG_CONFIG_HOME` set (148 passed, 1 failed, matching CI), then
+fixed by passing an explicit environment to that assertion and adding two tests that pin the
+override behaviour. The same local run then passed 151/151.
+
+Only the Linux leg has been observed to pass. Windows and macOS are exercised by CI alone; do not
+claim cross-platform support that has not been demonstrated. CI run conclusions are visible with
+`node core/cli.mjs gh`, which reports real run status rather than the presence of a workflow file.
