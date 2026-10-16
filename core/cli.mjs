@@ -726,9 +726,11 @@ async function main() {
  *
  * When stdout is a pipe, Node writes to it asynchronously: `process.exit()`
  * terminates before the buffer drains, so anything past the pipe capacity is
- * lost. On macOS the pipe capacity is 16 KiB, which truncated `--json` output
- * mid-string; the Linux capacity is 64 KiB, which is why local runs never saw it.
- * Setting the code lets Node flush and then exit on its own.
+ * lost. The capacity is platform-dependent, and the figures below are what was
+ * observed rather than documented constants: macOS CI truncated `--json` output
+ * mid-string at byte 8154 (8188 in a second case), and on Linux a 392,471-byte
+ * output arrived as 328,896 bytes, i.e. 63,575 bytes were discarded. Setting the
+ * code lets Node flush and then exit on its own.
  */
 main().then(
   (code) => {

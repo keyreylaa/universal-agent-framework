@@ -289,11 +289,13 @@ test("index.exclude from project config is applied to the index", () => {
 });
 
 test("JSON output is complete when stdout is a pipe, not just when it is a file", () => {
-  // `process.exit()` discards asynchronously buffered piped stdout. macOS's pipe
-  // capacity is 16 KiB and Linux's is 64 KiB, so CI truncated `--json` output
-  // mid-string on macOS while Linux passed. Writing to a file is synchronous and
-  // never truncated, so comparing pipe output against file output pins the
-  // invariant on every platform — provided the output exceeds the pipe capacity.
+  // `process.exit()` discards asynchronously buffered piped stdout. The pipe
+  // capacity is platform-dependent, so CI truncated `--json` output mid-string
+  // on macOS (cut at byte 8154) while Linux passed. Writing to a file is
+  // synchronous and never truncated, so comparing pipe output against file
+  // output pins the invariant on every platform — provided the output exceeds
+  // the pipe capacity. Linux's capacity was measured directly here: 392,471
+  // bytes were produced and 328,896 arrived, so 63,575 bytes ≈ 64 KiB were lost.
   const { projectRoot, env } = sandbox();
 
   // Enough matches that the JSON is several times Linux's 64 KiB pipe capacity,
@@ -307,11 +309,13 @@ test("JSON output is complete when stdout is a pipe, not just when it is a file"
   writeTree(projectRoot, tree);
   runCli(["index"], { cwd: projectRoot, env });
 
+  // Measured on Linux: search 392,471 bytes, install 23,045, compat 11,764,
+  // skills 10,802. Every case clears the 8,154-byte point at which macOS CI
+  // truncated, and `search` alone clears Linux's 64 KiB pipe capacity.
   const cases = [
     ["search", "sharedRetryHelper", "--limit", "1200", "--json"],
     ["compat", "--json"],
     ["skills", "--json"],
-    // Generates the largest of the install plans, which alone exceeds macOS's limit.
     ["install", "--agents", "claude,codex,opencode,omp", "--dry-run", "--json"],
   ];
 
@@ -333,7 +337,7 @@ test("JSON output is complete when stdout is a pipe, not just when it is a file"
     assert.ok(piped.endsWith("\n"), `${args[0]} output must end with a newline`);
   }
 
-  // Guard the guard: if no command exceeds the smaller pipe capacity, this test
+  // Guard the guard: if no command produced more than a pipe holds, this test
   // would pass with the bug present and stop protecting anything.
   const largest = runCli(["search", "sharedRetryHelper", "--limit", "1200", "--json", "--cwd", projectRoot], { cwd: projectRoot, env }).stdout.length;
   assert.ok(largest > 64 * 1024, `the largest output is ${largest} bytes, under Linux's 64 KiB pipe capacity`);

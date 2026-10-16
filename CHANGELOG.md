@@ -66,14 +66,15 @@ Claude Code, Codex CLI, and OpenCode adapters are derived from official document
   Node 21 — on Node 20 the quoted pattern became one literal path, so the run reported nothing
   found and looked like a pass.
 - **Pipe-safe output**: the CLI now exits through `process.exitCode` instead of `process.exit()`.
-  Piped stdout is written asynchronously, so exiting discarded whatever had not flushed: on macOS
-  (16 KiB pipe capacity) `uaf compat --json` was truncated mid-string, and on Linux any output
-  over 64 KiB lost exactly one buffer's worth. A regression test asserts that pipe output and
-  file output have identical lengths, and fails without the fix (328,896 bytes versus 392,471).
-  The hook entrypoint had the same exit in its blocking path, where a dropped payload would hide
-  the block itself; it sets `process.exitCode = 2` for the same reason. The guard's decision JSON
-  is far smaller than any pipe capacity, so that half is hardening rather than a reproduced
-  truncation.
+  Piped stdout is written asynchronously, so exiting discarded whatever had not flushed. The pipe
+  capacity is platform-dependent, and these figures are observations rather than documented
+  constants: macOS CI cut `uaf compat --json` mid-string at byte 8154 (8188 in a second case), and
+  on Linux a 392,471-byte output arrived as 328,896 bytes — 63,575 bytes lost. A regression test
+  asserts that pipe output and file output have identical lengths, and fails without the fix
+  (328,896 bytes versus 392,471). The hook entrypoint had the same exit in its blocking path,
+  where a dropped payload would hide the block itself; it sets `process.exitCode = 2` for the same
+  reason. The guard's decision JSON is 293 bytes as measured here, so that half is hardening rather
+  than a reproduced truncation.
 - **Tests**: unit, integration, security, and end-to-end suites. The end-to-end suite installs
   the skill set and asserts that Oh My Pi's own resolver returns an installed skill, and that
   duplicate copies across two shared roots collapse instead of being namespaced.

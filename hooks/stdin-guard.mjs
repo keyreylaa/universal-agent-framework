@@ -49,10 +49,12 @@ const verdict = rules ? evaluateCommand(command, rules) : null;
 
 // Exit through `process.exitCode`, never `process.exit()`: piped stdout and
 // stderr are written asynchronously, so an explicit exit can discard a decision
-// payload that has not flushed — on macOS a pipe holds only 16 KiB. A dropped
-// decision is worse than a slow one: the agent would see neither the block nor
-// its reason. Setting the code lets Node drain the pipes and exit on its own;
-// the blocked path still reports code 2.
+// payload that has not flushed. Pipes are small — the same defect truncated CLI
+// output on macOS CI after 8,154 bytes — and a dropped decision is worse than a
+// slow one: the agent would see neither the block nor its reason. This payload is
+// 293 bytes, so it is hardening, not a reproduced truncation: setting the code
+// lets Node drain the pipes and exit on its own, and the blocked path still
+// reports code 2.
 if (verdict?.decision === "block") {
   process.stdout.write(
     `${JSON.stringify({
