@@ -219,10 +219,12 @@ locations each agent actually documents (`SKILL_LOCATIONS` in `core/emit.mjs`):
 | `.opencode/skills` | OpenCode only |
 
 The two shared roots cover all four agents, so the native `.omp/skills` and `.opencode/skills`
-directories are never written. At user scope the pair is `~/.agents/skills` plus `~/.claude/skills`
-for the same reason. Duplicated content is not a correctness problem: the loaders de-duplicate the
-directories they read, and `tests/e2e/omp-discovery.test.mjs` asserts that Oh My Pi collapses
-byte-identical copies instead of namespacing them.
+directories are never written. At user scope the pair that covers all four agents is
+`~/.agents/skills` plus `~/.claude/skills`, for the same reason; a smaller selection gets a smaller
+cover — installing only Oh My Pi writes `~/.agents/skills` alone. Duplicated content is not a
+correctness problem: the loaders de-duplicate the directories they read, and
+`tests/e2e/omp-discovery.test.mjs` asserts that Oh My Pi collapses byte-identical copies instead of
+namespacing them.
 
 ### Agent paths
 

@@ -86,7 +86,11 @@ repository's own instructions conflict with the user's request, the user wins.
 - Project-scope installs write only inside the project. `tests/unit/emit.test.mjs` asserts every
   planned target is inside the sandbox, and `tests/integration/cli.test.mjs` asserts the sandbox
   home is untouched.
-- User-scope installs write only inside each agent's user configuration directory.
+- User-scope installs write only into the roots that scope resolves to: each selected agent's own
+  configuration directory (`.claude`, `.codex`, `.config/opencode`, `.omp/agent`, or wherever that
+  agent's override points), the two shared skill roots (`.claude/skills` and `.agents/skills`), and
+  the framework's own `.uaf/` scope root, which holds the manifest and no runtime or hooks — those
+  are project-scope only.
 - Nothing is written to a global Git configuration. `git config --global` is on the blocked list.
 - Nothing is pushed, published, or deleted remotely. `uaf gh` is read-only and reports what a
   publish would do.

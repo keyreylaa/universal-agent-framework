@@ -22,7 +22,10 @@ Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
   observed to pass — two consecutive runs are green on all nine matrix legs, which the page now
   states, together with the fact that macOS and Windows have still never been run locally.
   `docs/security.md` said uninstall "deletes only what the manifest claims", which is false for
-  `.uaf/guard-rules.json` and `.uaf/index.lock`, and now names those exceptions.
+  `.uaf/guard-rules.json` and `.uaf/index.lock`, and now names those exceptions. The same file said
+  a user-scope install writes only inside each agent's configuration directory; measured, it also
+  creates the shared `.agents/skills` root and the framework's own `.uaf/`, so the bullet now lists
+  what is actually written where.
 - The POSIX wrappers' unanswerable-prompt path had no test, which is how `docs/installation.md`
   came to document a status the scripts no longer returned. `tests/integration/install.test.mjs`
   now runs both wrappers with stdin at EOF and asserts exit 2, the message, and that nothing was
